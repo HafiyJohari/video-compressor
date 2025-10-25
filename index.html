@@ -82,75 +82,87 @@
   </div>
 
   <!-- ffmpeg.wasm UMD build -->
-  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.umd.min.js"></script>
   <script>
-    const { createFFmpeg, fetchFile } = FFmpeg;
-    const ffmpeg = createFFmpeg({
-      log: false,
-      corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js'
-    });
+  // --- UI wiring FIRST so file choose works even if engine hasn't loaded ---
+  const $ = (id)=>document.getElementById(id);
+  const drop = $('drop');
+  const finput = $('file');
+  const fname = $('fname');
+  const go = $('go');
+  const bar = $('bar');
+  const out = $('out');
+  const status = $('status');
+  const w = $('w'); const h = $('h'); const vb = $('vb'); const fmt = $('fmt');
 
-    const $ = (id)=>document.getElementById(id);
-    const drop = $('drop');
-    const finput = $('file');
-    const fname = $('fname');
-    const go = $('go');
-    const bar = $('bar');
-    const out = $('out');
-    const status = $('status');
-    const w = $('w'); const h = $('h'); const vb = $('vb'); const fmt = $('fmt');
+  const radios = Array.from(document.querySelectorAll('input[name="preset"]'));
+  const applyPreset = () => {
+    const v = radios.find(r=>r.checked).value;
+    if (v==='mp4-720'){ w.value=1280; h.value=720; vb.value='4M'; fmt.value='mp4'; }
+    if (v==='mp4-1080'){ w.value=1920; h.value=1080; vb.value='8M'; fmt.value='mp4'; }
+    if (v==='webm-720'){ w.value=1280; h.value=720; vb.value='2500k'; fmt.value='webm'; }
+  };
+  radios.forEach(r=>r.addEventListener('change', applyPreset));
+  applyPreset();
 
-    // Presets
-    const radios = Array.from(document.querySelectorAll('input[name="preset"]'));
-    const applyPreset = () => {
-      const v = radios.find(r=>r.checked).value;
-      if (v==='mp4-720'){ w.value=1280; h.value=720; vb.value='4M'; fmt.value='mp4'; }
-      if (v==='mp4-1080'){ w.value=1920; h.value=1080; vb.value='8M'; fmt.value='mp4'; }
-      if (v==='webm-720'){ w.value=1280; h.value=720; vb.value='2500k'; fmt.value='webm'; }
-    };
-    radios.forEach(r=>r.addEventListener('change', applyPreset));
-    applyPreset();
+  const setFile = (file)=>{ finput._file=file; fname.textContent=file.name; go.disabled=false; };
+  drop.addEventListener('dragover', e=>{e.preventDefault(); drop.classList.add('drag');});
+  drop.addEventListener('dragleave', ()=> drop.classList.remove('drag'));
+  drop.addEventListener('drop', e=>{ e.preventDefault(); drop.classList.remove('drag'); if(e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+  finput.addEventListener('change', e=>{ if(e.target.files[0]) setFile(e.target.files[0]); });
 
-    // Drag & drop / choose
-    const setFile = (file)=>{ finput.file=file; fname.textContent=file.name; go.disabled=false; };
-    drop.addEventListener('dragover', e=>{e.preventDefault(); drop.classList.add('drag');});
-    drop.addEventListener('dragleave', ()=> drop.classList.remove('drag'));
-    drop.addEventListener('drop', e=>{ e.preventDefault(); drop.classList.remove('drag'); if(e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
-    finput.addEventListener('change', e=>{ if(e.target.files[0]) setFile(e.target.files[0]); });
+  // --- Lazy load ffmpeg when needed with 2 CDNs + fallback ---
+  let FF;
+  async function loadFF(){
+    if (FF) return FF;
+    status.textContent = 'Loading engine…';
+    const load = (src)=> new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=()=>res(); s.onerror=()=>rej(); document.head.appendChild(s); });
+    try {
+      await load('https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.umd.min.js');
+    } catch { try { await load('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.umd.min.js'); } catch(e){ throw new Error('Failed to load engine'); } }
+    FF = window.FFmpeg; status.textContent='';
+    return FF;
+  }
 
-    FFmpeg.setProgress && ffmpeg.setProgress(({ ratio })=>{ bar.style.width = `${Math.round((ratio||0)*100)}%`; });
+  let ffmpeg, createFFmpeg, fetchFile;
+  function updateProgress(ratio){ bar.style.width = `${Math.round((ratio||0)*100)}%`; }
 
-    async function ensureFF(){
-      if(!ffmpeg.isLoaded()){ status.textContent = 'Loading engine…'; await ffmpeg.load(); status.textContent=''; }
+  async function ensureFF(){
+    if (!ffmpeg){
+      const FF = await loadFF();
+      createFFmpeg = FF.createFFmpeg; fetchFile = FF.fetchFile;
+      ffmpeg = createFFmpeg({ log:false, corePath:'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js' });
+      FF.setProgress && ffmpeg.setProgress(({ratio})=>updateProgress(ratio));
+      await ffmpeg.load();
     }
+  }
 
-    async function compress(){
-      try{
-        go.disabled=true; bar.style.width='0%'; out.innerHTML='';
-        await ensureFF();
-        const file = finput.file || finput.files[0];
-        if(!file){ alert('Choose a video first.'); go.disabled=false; return; }
-        const inName = 'in';
-        const isMP4 = fmt.value==='mp4';
-        const outName = isMP4 ? 'output.mp4' : 'output.webm';
-        ffmpeg.FS('writeFile', inName, await fetchFile(file));
-        const scale = `scale=${parseInt(w.value)||1280}:${parseInt(h.value)||720}:force_original_aspect_ratio=decrease`;
-        status.textContent='Compressing…';
-        const args = isMP4
+  async function compress(){
+    try{
+      go.disabled=true; out.innerHTML=''; updateProgress(0);
+      const file = finput._file || finput.files?.[0];
+      if(!file){ alert('Choose a video first.'); go.disabled=false; return; }
+      await ensureFF();
+      const inName = 'in';
+      const isMP4 = fmt.value==='mp4';
+      const outName = isMP4 ? 'output.mp4' : 'output.webm';
+      await ffmpeg.FS('writeFile', inName, await fetchFile(file));
+      const scale = `scale=${parseInt(w.value)||1280}:${parseInt(h.value)||720}:force_original_aspect_ratio=decrease`;
+      status.textContent='Compressing…';
+      const args = isMP4
           ? ['-i',inName,'-vf',scale,'-c:v','libx264','-preset','veryfast','-b:v',vb.value||'4M','-pix_fmt','yuv420p','-movflags','+faststart','-c:a','aac','-b:a','128k',outName]
           : ['-i',inName,'-vf',scale,'-c:v','libvpx-vp9','-b:v',vb.value||'2500k','-c:a','libopus','-b:a','96k',outName];
-        await ffmpeg.run(...args);
-        const data = ffmpeg.FS('readFile', outName);
-        const blob = new Blob([data.buffer], {type: isMP4?'video/mp4':'video/webm'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href=url; a.download=outName; a.textContent=`Download ${outName}`; a.className='big'; out.appendChild(a);
-        const info=document.createElement('div'); info.className='mono muted'; info.style.marginTop='6px'; info.textContent=`Output size: ${(blob.size/1024).toFixed(1)} KB`; out.appendChild(info);
-        status.textContent='Done.';
-      }catch(err){ console.error(err); status.textContent='Error: '+err.message; }
-      finally{ go.disabled=false; if(bar.style.width!=='100%') bar.style.width='100%'; }
-    }
+      await ffmpeg.run(...args);
+      const data = await ffmpeg.FS('readFile', outName);
+      const blob = new Blob([data.buffer], {type: isMP4?'video/mp4':'video/webm'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download=outName; a.textContent=`Download ${outName}`; a.className='big'; out.appendChild(a);
+      const info=document.createElement('div'); info.className='mono muted'; info.style.marginTop='6px'; info.textContent=`Output size: ${(blob.size/1024).toFixed(1)} KB`; out.appendChild(info);
+      status.textContent='Done.';
+      updateProgress(1);
+    }catch(err){ console.error(err); status.textContent='Error: '+err.message; go.disabled=false; }
+  }
 
-    go.addEventListener('click', compress);
-  </script>
+  go.addEventListener('click', compress);
+</script>
 </body>
 </html>
