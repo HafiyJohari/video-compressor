@@ -116,110 +116,113 @@
   </div>
 
   <!-- App: use the single‑thread core to avoid cross‑origin isolation requirements. -->
-  <script type="module">
-    import { createFFmpeg, fetchFile } from 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js';
+  <script>
+  // Using UMD build (global FFmpeg) instead of ESM to avoid module import issues on GitHub Pages
+  const { createFFmpeg, fetchFile } = FFmpeg;
 
-    const ffmpeg = createFFmpeg({
-      log: true,
-      corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js'
-    });
+  const ffmpeg = createFFmpeg({
+    log: true,
+    corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js'
+  });
 
-    const el = (id)=>document.getElementById(id);
-    const drop = el('drop');
-    const fileInput = el('file');
-    const go = el('go');
-    const bar = el('bar');
-    const log = el('log');
-    const out = el('out');
-    const w = el('w');
-    const h = el('h');
-    const vb = el('vb');
-    const fmt = el('fmt');
-    const preset = el('preset');
+  const el = (id)=>document.getElementById(id);
+  const drop = el('drop');
+  const fileInput = el('file');
+  const go = el('go');
+  const bar = el('bar');
+  const log = el('log');
+  const out = el('out');
+  const w = el('w');
+  const h = el('h');
+  const vb = el('vb');
+  const fmt = el('fmt');
+  const preset = el('preset');
 
-    // Preset behaviour
-    const applyPreset = () => {
-      switch (preset.value) {
-        case '720p-mp4': w.value=1280; h.value=720; vb.value='4M'; fmt.value='mp4'; break;
-        case '1080p-mp4': w.value=1920; h.value=1080; vb.value='8M'; fmt.value='mp4'; break;
-        case 'webm-720p': w.value=1280; h.value=720; vb.value='2500k'; fmt.value='webm'; break;
-        case 'custom': /* keep user values */ break;
+  // Preset behaviour
+  const applyPreset = () => {
+    switch (preset.value) {
+      case '720p-mp4': w.value=1280; h.value=720; vb.value='4M'; fmt.value='mp4'; break;
+      case '1080p-mp4': w.value=1920; h.value=1080; vb.value='8M'; fmt.value='mp4'; break;
+      case 'webm-720p': w.value=1280; h.value=720; vb.value='2500k'; fmt.value='webm'; break;
+      case 'custom': /* keep user values */ break;
+    }
+  };
+  preset.addEventListener('change', applyPreset);
+
+  // Drag‑drop wiring
+  const onFile = (f) => { fileInput.file = f; go.disabled = false; drop.querySelector('strong').textContent = f.name; };
+  drop.addEventListener('dragover', (e)=>{e.preventDefault(); drop.classList.add('drag');});
+  drop.addEventListener('dragleave', ()=>drop.classList.remove('drag'));
+  drop.addEventListener('drop', (e)=>{ e.preventDefault(); drop.classList.remove('drag'); if(e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); });
+  fileInput.addEventListener('change', (e)=>{ if(e.target.files[0]) onFile(e.target.files[0]); });
+
+  const ensureFF = async()=>{
+    if (!ffmpeg.isLoaded()) {
+      log.textContent = 'Loading engine… (~15–25 MB)';
+      await ffmpeg.load();
+    }
+  };
+
+  ffmpeg.setProgress(({ ratio })=>{
+    bar.style.width = `${Math.round((ratio||0)*100)}%`;
+  });
+
+  const run = async () => {
+    try {
+      go.disabled = true; out.innerHTML = ''; bar.style.width='0%';
+      await ensureFF();
+
+      const f = fileInput.file || fileInput.files[0];
+      if (!f) { alert('Please choose a video first.'); go.disabled=false; return; }
+
+      const inName = 'input';
+      const outName = fmt.value === 'mp4' ? 'output.mp4' : 'output.webm';
+
+      ffmpeg.FS('writeFile', `${inName}`, await fetchFile(f));
+
+      const scale = `scale=${parseInt(w.value)||1280}:${parseInt(h.value)||720}:force_original_aspect_ratio=decrease`;
+
+      let args;
+      if (fmt.value === 'mp4') {
+        args = ['-i', inName, '-vf', scale, '-c:v', 'libx264', '-preset', 'veryfast', '-b:v', vb.value || '4M', '-movflags', '+faststart', '-pix_fmt','yuv420p', '-c:a','aac','-b:a','128k', outName];
+      } else {
+        args = ['-i', inName, '-vf', scale, '-c:v','libvpx-vp9','-b:v', vb.value || '2500k', '-c:a','libopus','-b:a','96k', outName];
       }
-    };
-    preset.addEventListener('change', applyPreset);
 
-    // Drag‑drop wiring
-    const onFile = (f) => { fileInput.file = f; go.disabled = false; drop.querySelector('strong').textContent = f.name; };
-    drop.addEventListener('dragover', (e)=>{e.preventDefault(); drop.classList.add('drag');});
-    drop.addEventListener('dragleave', ()=>drop.classList.remove('drag'));
-    drop.addEventListener('drop', (e)=>{ e.preventDefault(); drop.classList.remove('drag'); if(e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); });
-    fileInput.addEventListener('change', (e)=>{ if(e.target.files[0]) onFile(e.target.files[0]); });
+      log.textContent = 'Compressing…';
+      await ffmpeg.run(...args);
 
-    const ensureFF = async()=>{
-      if (!ffmpeg.isLoaded()) {
-        log.textContent = 'Loading engine… (~15–25 MB)';
-        await ffmpeg.load();
-      }
-    };
+      const data = ffmpeg.FS('readFile', outName);
+      const blob = new Blob([data.buffer], { type: fmt.value==='mp4' ? 'video/mp4' : 'video/webm' });
+      const url = URL.createObjectURL(blob);
 
-    ffmpeg.setProgress(({ ratio })=>{
-      bar.style.width = `${Math.round((ratio||0)*100)}%`;
-    });
+      const a = document.createElement('a');
+      a.href = url; a.download = outName; a.className='btn'; a.textContent = `Download ${outName}`;
+      out.appendChild(a);
 
-    const run = async () => {
-      try {
-        go.disabled = true; out.innerHTML = ''; bar.style.width='0%';
-        await ensureFF();
+      const sizeKB = (blob.size/1024).toFixed(1);
+      const info = document.createElement('div');
+      info.className='mono muted'; info.style.marginTop='6px';
+      info.textContent = `Output size: ${sizeKB} KB`; out.appendChild(info);
 
-        const f = fileInput.file || fileInput.files[0];
-        if (!f) { alert('Please choose a video first.'); go.disabled=false; return; }
+      log.textContent = 'Done.';
+    } catch (e) {
+      console.error(e); log.textContent = 'Error: ' + e.message;
+    } finally {
+      go.disabled = false; if(bar.style.width !== '100%') bar.style.width='100%';
+    }
+  };
 
-        const inName = 'input';
-        const outName = fmt.value === 'mp4' ? 'output.mp4' : 'output.webm';
+  go.addEventListener('click', run);
+  applyPreset();
 
-        ffmpeg.FS('writeFile', `${inName}`, await fetchFile(f));
-
-        const scale = `scale=${parseInt(w.value)||1280}:${parseInt(h.value)||720}:force_original_aspect_ratio=decrease`;
-
-        let args;
-        if (fmt.value === 'mp4') {
-          args = ['-i', inName, '-vf', scale, '-c:v', 'libx264', '-preset', 'veryfast', '-b:v', vb.value || '4M', '-movflags', '+faststart', '-pix_fmt','yuv420p', '-c:a','aac','-b:a','128k', outName];
-        } else {
-          args = ['-i', inName, '-vf', scale, '-c:v','libvpx-vp9','-b:v', vb.value || '2500k', '-c:a','libopus','-b:a','96k', outName];
-        }
-
-        log.textContent = 'Compressing…';
-        await ffmpeg.run(...args);
-
-        const data = ffmpeg.FS('readFile', outName);
-        const blob = new Blob([data.buffer], { type: fmt.value==='mp4' ? 'video/mp4' : 'video/webm' });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = url; a.download = outName; a.className='btn'; a.textContent = `Download ${outName}`;
-        out.appendChild(a);
-
-        const sizeKB = (blob.size/1024).toFixed(1);
-        const info = document.createElement('div');
-        info.className='mono muted'; info.style.marginTop='6px';
-        info.textContent = `Output size: ${sizeKB} KB`; out.appendChild(info);
-
-        log.textContent = 'Done.';
-      } catch (e) {
-        console.error(e); log.textContent = 'Error: ' + e.message;
-      } finally {
-        go.disabled = false; bar.style.width='100%';
-      }
-    };
-
-    go.addEventListener('click', run);
-    applyPreset();
-
-    // Help text
-    document.getElementById('how').addEventListener('click',(e)=>{
-      e.preventDefault();
-      alert('1) Drop a video.\n2) Pick a preset (720p MP4 is great for hero backgrounds).\n3) Click Compress.\n4) Download and place beside your index.html, then use <video src=\'hero.mp4\'>.');
-    });
-  </script>
+  document.getElementById('how').addEventListener('click',(e)=>{
+    e.preventDefault();
+    alert('1) Drop a video.
+2) Pick a preset (720p MP4 is great for hero backgrounds).
+3) Click Compress.
+4) Download and place beside your index.html, then use <video src=\'hero.mp4\'>.');
+  });
+</script>
 </body>
 </html>
