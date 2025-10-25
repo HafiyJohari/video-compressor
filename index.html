@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hafiy — Video Compressor</title>
+  <meta name="description" content="Client‑side video compressor using ffmpeg.wasm. Drag & drop a file, choose a preset, and download the compressed MP4/WebM. No server required." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#0b0c10;--panel:#11131a;--muted:#c9d1d9;--border:rgba(255,255,255,.08);--hi:#00e5ff;--hi2:#ff3366
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;background:radial-gradient(1200px 700px at 120% -10%,rgba(0,229,255,.08),transparent 60%),radial-gradient(900px 520px at -20% -20%,rgba(255,51,102,.08),transparent 60%),var(--bg);color:var(--muted);font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .wrap{max-width:980px;margin:0 auto;padding:26px 18px 60px}
+    header{display:flex;justify-content:space-between;align-items:center}
+    h1{margin:8px 0 10px;color:#fff;font-size:clamp(22px,4.6vw,40px);letter-spacing:-.02em}
+    .sub{opacity:.8}
+    .panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;box-shadow:0 0 0 2px rgba(255,255,255,.02),0 10px 24px rgba(0,0,0,.35);padding:18px}
+    .grid{display:grid;grid-template-columns:1fr;gap:16px}
+    @media(min-width:860px){.grid{grid-template-columns:1.1fr .9fr}}
+    .drop{display:grid;place-items:center;border:1px dashed var(--border);border-radius:14px;padding:26px;min-height:180px;text-align:center}
+    .drop.drag{border-color:var(--hi)}
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:#141823;color:#fff;text-decoration:none;font-weight:600}
+    .btn[disabled]{opacity:.5;pointer-events:none}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    label{font-size:13px;opacity:.85}
+    select,input[type=number],input[type=text]{background:#0f1220;color:#e7e9ee;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+    .progress{height:10px;background:#0f1220;border:1px solid var(--border);border-radius:999px;overflow:hidden}
+    .bar{height:100%;background:linear-gradient(90deg,var(--hi),var(--hi2));width:0%}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+    .muted{opacity:.75}
+    footer{margin-top:28px;opacity:.7;font-size:13px}
+    .pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#0f1220;border:1px solid var(--border);font-size:12px;margin-right:6px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Video Compressor</h1>
+        <div class="sub">Client‑side (browser only) using <span class="pill">ffmpeg.wasm</span>. Works on GitHub Pages. No uploads.</div>
+      </div>
+      <a class="btn" href="#" id="how">How to use</a>
+    </header>
+
+    <div class="grid">
+      <div class="panel">
+        <div id="drop" class="drop">
+          <div>
+            <strong>Drag & drop</strong> your video here (MP4/MOV/WebM), or
+            <label class="btn" style="margin-left:6px;cursor:pointer">
+              Choose file
+              <input id="file" type="file" accept="video/*" hidden>
+            </label>
+            <div class="muted" style="margin-top:8px">Tip: For web background, 720p is more than enough.</div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px" class="row">
+          <div>
+            <label>Preset</label><br>
+            <select id="preset">
+              <option value="720p-mp4">MP4 H.264 — 720p (≈ 4 Mbps)</option>
+              <option value="1080p-mp4">MP4 H.264 — 1080p (≈ 8 Mbps)</option>
+              <option value="webm-720p">WebM VP9 — 720p (≈ 2.5 Mbps, smaller)</option>
+              <option value="custom">Custom (set below)</option>
+            </select>
+          </div>
+          <div>
+            <label>Width × Height</label><br>
+            <input id="w" type="number" value="1280" style="width:96px"> ×
+            <input id="h" type="number" value="720" style="width:96px">
+          </div>
+          <div>
+            <label>Video bitrate</label><br>
+            <input id="vb" type="text" value="4M" style="width:120px"> <span class="muted">(e.g. 3500k or 4M)</span>
+          </div>
+          <div>
+            <label>Format</label><br>
+            <select id="fmt">
+              <option value="mp4">mp4 (H.264 + AAC)</option>
+              <option value="webm">webm (VP9 + Opus)</option>
+            </select>
+          </div>
+          <div>
+            <label>&nbsp;</label><br>
+            <button id="go" class="btn" disabled>Compress</button>
+          </div>
+        </div>
+
+        <div style="margin-top:14px">
+          <div class="progress"><div id="bar" class="bar"></div></div>
+          <div id="log" class="mono muted" style="margin-top:6px;min-height:18px"></div>
+        </div>
+
+        <div id="out" style="margin-top:12px"></div>
+      </div>
+
+      <div class="panel">
+        <h3 style="margin:6px 0 8px;color:#fff">Notes</h3>
+        <ul>
+          <li>Runs entirely in your browser. Safe for GitHub Pages; no server needed.</li>
+          <li>Use <strong>720p MP4</strong> for hero backgrounds (fast + compatible).</li>
+          <li>If file is huge, try <strong>WebM VP9</strong> preset — smaller size.</li>
+          <li>Bitrate rule of thumb: 720p ≈ 3–5 Mbps, 1080p ≈ 6–10 Mbps.</li>
+          <li>Loop your clip in the page using the <code>loop</code> attribute on <code>&lt;video&gt;</code>.</li>
+        </ul>
+        <p class="muted">After compressing, a download button appears. Drop that file next to your <code>index.html</code> and use it like <code>src="hero.mp4"</code>.</p>
+      </div>
+    </div>
+
+    <footer>© <script>document.write(new Date().getFullYear())</script> Hafiy Johari — Built with ffmpeg.wasm</footer>
+  </div>
+
+  <!-- App: use the single‑thread core to avoid cross‑origin isolation requirements. -->
+  <script type="module">
+    import { createFFmpeg, fetchFile } from 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js';
+
+    const ffmpeg = createFFmpeg({
+      log: true,
+      corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js'
+    });
+
+    const el = (id)=>document.getElementById(id);
+    const drop = el('drop');
+    const fileInput = el('file');
+    const go = el('go');
+    const bar = el('bar');
+    const log = el('log');
+    const out = el('out');
+    const w = el('w');
+    const h = el('h');
+    const vb = el('vb');
+    const fmt = el('fmt');
+    const preset = el('preset');
+
+    // Preset behaviour
+    const applyPreset = () => {
+      switch (preset.value) {
+        case '720p-mp4': w.value=1280; h.value=720; vb.value='4M'; fmt.value='mp4'; break;
+        case '1080p-mp4': w.value=1920; h.value=1080; vb.value='8M'; fmt.value='mp4'; break;
+        case 'webm-720p': w.value=1280; h.value=720; vb.value='2500k'; fmt.value='webm'; break;
+        case 'custom': /* keep user values */ break;
+      }
+    };
+    preset.addEventListener('change', applyPreset);
+
+    // Drag‑drop wiring
+    const onFile = (f) => { fileInput.file = f; go.disabled = false; drop.querySelector('strong').textContent = f.name; };
+    drop.addEventListener('dragover', (e)=>{e.preventDefault(); drop.classList.add('drag');});
+    drop.addEventListener('dragleave', ()=>drop.classList.remove('drag'));
+    drop.addEventListener('drop', (e)=>{ e.preventDefault(); drop.classList.remove('drag'); if(e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); });
+    fileInput.addEventListener('change', (e)=>{ if(e.target.files[0]) onFile(e.target.files[0]); });
+
+    const ensureFF = async()=>{
+      if (!ffmpeg.isLoaded()) {
+        log.textContent = 'Loading engine… (~15–25 MB)';
+        await ffmpeg.load();
+      }
+    };
+
+    ffmpeg.setProgress(({ ratio })=>{
+      bar.style.width = `${Math.round((ratio||0)*100)}%`;
+    });
+
+    const run = async () => {
+      try {
+        go.disabled = true; out.innerHTML = ''; bar.style.width='0%';
+        await ensureFF();
+
+        const f = fileInput.file || fileInput.files[0];
+        if (!f) { alert('Please choose a video first.'); go.disabled=false; return; }
+
+        const inName = 'input';
+        const outName = fmt.value === 'mp4' ? 'output.mp4' : 'output.webm';
+
+        ffmpeg.FS('writeFile', `${inName}`, await fetchFile(f));
+
+        const scale = `scale=${parseInt(w.value)||1280}:${parseInt(h.value)||720}:force_original_aspect_ratio=decrease`;
+
+        let args;
+        if (fmt.value === 'mp4') {
+          args = ['-i', inName, '-vf', scale, '-c:v', 'libx264', '-preset', 'veryfast', '-b:v', vb.value || '4M', '-movflags', '+faststart', '-pix_fmt','yuv420p', '-c:a','aac','-b:a','128k', outName];
+        } else {
+          args = ['-i', inName, '-vf', scale, '-c:v','libvpx-vp9','-b:v', vb.value || '2500k', '-c:a','libopus','-b:a','96k', outName];
+        }
+
+        log.textContent = 'Compressing…';
+        await ffmpeg.run(...args);
+
+        const data = ffmpeg.FS('readFile', outName);
+        const blob = new Blob([data.buffer], { type: fmt.value==='mp4' ? 'video/mp4' : 'video/webm' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url; a.download = outName; a.className='btn'; a.textContent = `Download ${outName}`;
+        out.appendChild(a);
+
+        const sizeKB = (blob.size/1024).toFixed(1);
+        const info = document.createElement('div');
+        info.className='mono muted'; info.style.marginTop='6px';
+        info.textContent = `Output size: ${sizeKB} KB`; out.appendChild(info);
+
+        log.textContent = 'Done.';
+      } catch (e) {
+        console.error(e); log.textContent = 'Error: ' + e.message;
+      } finally {
+        go.disabled = false; bar.style.width='100%';
+      }
+    };
+
+    go.addEventListener('click', run);
+    applyPreset();
+
+    // Help text
+    document.getElementById('how').addEventListener('click',(e)=>{
+      e.preventDefault();
+      alert('1) Drop a video.\n2) Pick a preset (720p MP4 is great for hero backgrounds).\n3) Click Compress.\n4) Download and place beside your index.html, then use <video src=\'hero.mp4\'>.');
+    });
+  </script>
+</body>
+</html>
