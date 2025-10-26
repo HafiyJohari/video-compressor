@@ -192,176 +192,163 @@
     </div>
   </div>
 
-  <script type="module">
-    import { createFFmpeg, fetchFile } from 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js';
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
+<script>
+  // UMD build attaches FFmpeg to window
+  const { createFFmpeg, fetchFile } = FFmpeg;
 
-    const el = id => document.getElementById(id);
-    const file = el('file');
-    const modeSimple = el('modeSimple');
-    const modeAdv = el('modeAdv');
-    const simple = el('simple');
-    const advanced = el('advanced');
-    const presetSimple = el('presetSimple');
-    const formatSel = el('format');
-    const crf = el('crf');
-    const res = el('resolution');
-    const fps = el('fps');
-    const ab = el('ab');
-    const copyAudio = el('copyAudio');
-    const vcodec = el('vcodec');
-    const preset = el('preset');
-    const crfAdv = el('crfAdv');
-    const extra = el('extra');
-    const start = el('start');
-    const bar = el('bar');
-    const status = el('status');
-    const out = el('out');
-    const link = el('download');
-    const size = el('size');
-    const codecInfo = el('codecInfo');
-    const cmd = el('cmd');
+  const el = id => document.getElementById(id);
+  const file = el('file');
+  const modeSimple = el('modeSimple');
+  const modeAdv = el('modeAdv');
+  const simple = el('simple');
+  const advanced = el('advanced');
+  const presetSimple = el('presetSimple');
+  const formatSel = el('format');
+  const crf = el('crf');
+  const res = el('resolution');
+  const fps = el('fps');
+  const ab = el('ab');
+  const copyAudio = el('copyAudio');
+  const vcodec = el('vcodec');
+  const preset = el('preset');
+  const crfAdv = el('crfAdv');
+  const extra = el('extra');
+  const start = el('start');
+  const bar = el('bar');
+  const status = el('status');
+  const out = el('out');
+  const link = el('download');
+  const size = el('size');
+  const codecInfo = el('codecInfo');
+  const cmd = el('cmd');
 
-    let ffmpeg; let loaded = false;
+  let ffmpeg; let loaded = false;
 
-    function setMode(simpleMode){
-      modeSimple.classList.toggle('active', simpleMode);
-      modeAdv.classList.toggle('active', !simpleMode);
-      simple.style.display = simpleMode ? 'block' : 'none';
-      advanced.style.display = simpleMode ? 'none' : 'block';
+  function setMode(simpleMode){
+    modeSimple.classList.toggle('active', simpleMode);
+    modeAdv.classList.toggle('active', !simpleMode);
+    simple.style.display = simpleMode ? 'block' : 'none';
+    advanced.style.display = simpleMode ? 'none' : 'block';
+  }
+
+  modeSimple.onclick = () => setMode(true);
+  modeAdv.onclick = () => setMode(false);
+
+  function applyPreset(){
+    const p = presetSimple.value;
+    if(p === 'keep'){ crf.value = 22; formatSel.value = 'mp4'; res.value=''; fps.value=''; }
+    if(p === 'smaller'){ crf.value = 26; formatSel.value='mp4'; res.value=''; fps.value=''; }
+    if(p === 'social'){ crf.value = 24; formatSel.value='mp4'; }
+    if(p === 'hevc'){ crf.value = 28; formatSel.value='mp4'; }
+    if(p === 'vp9'){ crf.value = 33; formatSel.value='webm'; }
+  }
+  presetSimple.onchange = applyPreset; applyPreset();
+
+  async function ensureFFmpeg(){
+    if(loaded) return;
+    ffmpeg = createFFmpeg({ log: true, corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js' });
+    ffmpeg.setProgress(({ ratio }) => { bar.style.width = Math.round((ratio||0)*100) + '%'; });
+    status.textContent = 'Loading FFmpeg… (one-time)';
+    await ffmpeg.load();
+    loaded = true;
+    status.textContent = 'Ready.';
+  }
+
+  function human(n){
+    if(!n && n!==0) return '';
+    const u=['B','KB','MB','GB'];
+    let i=0; while(n>=1024 && i<u.length-1){ n/=1024; i++; }
+    return n.toFixed(1)+' '+u[i];
+  }
+
+  function buildCommandSimple(ext){
+    const p = presetSimple.value;
+    let v = 'libx264', a = 'aac';
+    if(p==='hevc') v='libx265';
+    if(p==='vp9' || ext==='webm') { v='libvpx-vp9'; a='libopus'; formatSel.value='webm'; }
+
+    const args = ['-i','input'];
+
+    if(v==='libx264' || v==='libx265'){
+      args.push('-c:v', v, '-crf', String(crf.value|| (v==='libx264'?22:28)), '-preset', (p==='smaller'?'slow':'medium'), '-pix_fmt','yuv420p');
+      if(ext==='mp4') args.push('-movflags','+faststart');
+      if(v==='libx265') args.push('-tag:v','hvc1');
+    } else if(v==='libvpx-vp9') {
+      args.push('-c:v','libvpx-vp9','-b:v','0','-crf', String(crf.value||33));
     }
 
-    modeSimple.onclick = () => setMode(true);
-    modeAdv.onclick = () => setMode(false);
+    if(res.value) args.push('-vf',`scale=${res.value}`);
+    if(fps.value) args.push('-r', fps.value);
 
-    // Preset -> defaults
-    function applyPreset(){
-      const p = presetSimple.value;
-      if(p === 'keep'){ crf.value = 22; formatSel.value = 'mp4'; res.value=''; fps.value=''; }
-      if(p === 'smaller'){ crf.value = 26; formatSel.value='mp4'; res.value=''; fps.value=''; }
-      if(p === 'social'){ crf.value = 24; formatSel.value='mp4'; /* 720p if bigger: handled at build time */ }
-      if(p === 'hevc'){ crf.value = 28; formatSel.value='mp4'; }
-      if(p === 'vp9'){ crf.value = 33; formatSel.value='webm'; }
-    }
-    presetSimple.onchange = applyPreset; applyPreset();
-
-    async function ensureFFmpeg(){
-      if(loaded) return;
-      ffmpeg = createFFmpeg({ log: true, corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js' });
-      ffmpeg.setLogger(({ type, message }) => {
-        if(type === 'fferr' || type === 'ffout'){
-          const m = message.trim();
-          if(m.startsWith('frame=')){
-            // try parse progress percent from time, fallback to pulse
-            bar.style.width = (parseFloat(bar.style.width)||0) < 95 ? (parseFloat(bar.style.width)||0)+0.2 + '%' : bar.style.width;
-          }
-        }
-      });
-      ffmpeg.setProgress(({ ratio }) => { bar.style.width = Math.round((ratio||0)*100) + '%'; });
-      status.textContent = 'Loading FFmpeg… (one-time)';
-      await ffmpeg.load();
-      loaded = true;
-      status.textContent = 'Ready.';
+    if(copyAudio.value==='copy'){
+      args.push('-c:a','copy');
+    } else {
+      args.push('-c:a', a, '-b:a', ab.value+'k', '-ar','48000','-ac','2');
     }
 
-    function human(n){
-      if(!n && n!==0) return '';
-      const u=['B','KB','MB','GB'];
-      let i=0; while(n>=1024 && i<u.length-1){ n/=1024; i++; }
-      return n.toFixed(1)+' '+u[i];
+    args.push('output.'+ext);
+    return args;
+  }
+
+  function buildCommandAdvanced(ext){
+    const args=['-i','input'];
+    const v=vcodec.value; const q=String(crfAdv.value||22);
+    args.push('-c:v', v);
+    if(v==='libx264' || v==='libx265'){
+      args.push('-crf', q, '-preset', preset.value, '-pix_fmt','yuv420p');
+      if(ext==='mp4') args.push('-movflags','+faststart');
+      if(v==='libx265') args.push('-tag:v','hvc1');
+    } else if(v==='libvpx-vp9'){
+      args.push('-b:v','0','-crf', q);
     }
+    if(res.value) args.push('-vf',`scale=${res.value}`);
+    if(fps.value) args.push('-r', fps.value);
+    if(copyAudio.value==='copy') args.push('-c:a','copy'); else args.push('-c:a','aac','-b:a',ab.value+'k','-ar','48000','-ac','2');
+    if(extra && extra.value) args.push(...extra.value.split(' ').filter(Boolean));
+    args.push('output.'+ext);
+    return args;
+  }
 
-    function buildCommandSimple(ext){
-      // Decide codec by preset/format
-      const p = presetSimple.value;
-      let v = 'libx264', a = 'aac';
-      if(p==='hevc') v='libx265';
-      if(p==='vp9' || ext==='webm') { v='libvpx-vp9'; a='libopus'; }
+  function buildCommand(){
+    const ext = formatSel.value;
+    const args = (simple.style.display!=='none') ? buildCommandSimple(ext) : buildCommandAdvanced(ext);
+    cmd.textContent = 'ffmpeg '+args.map(a=> (a.includes(' ') ? '"'+a+'"' : a)).join(' ');
+    return { args, ext };
+  }
 
-      // Base
-      const args = ['-i','input'];
+  async function run(){
+    if(!file.files[0]){ alert('Choose a video first.'); return; }
+    await ensureFFmpeg();
+    bar.style.width='0%'; out.style.display='none'; codecInfo.textContent=''; size.textContent='';
 
-      // Video codec + CRF path
-      if(v==='libx264' || v==='libx265'){
-        args.push('-c:v', v, '-crf', String(crf.value|| (v==='libx264'?22:28)), '-preset', (p==='smaller'?'slow':'medium'), '-pix_fmt','yuv420p');
-        if(ext==='mp4') args.push('-movflags','+faststart');
-        if(v==='libx265') args.push('-tag:v','hvc1');
-      } else if(v==='libvpx-vp9') {
-        args.push('-c:v','libvpx-vp9','-b:v','0','-crf', String(crf.value||33));
-      }
-
-      // Social: downscale if >720p (we can’t read source dims easily here; let user choose 720p if wanted)
-      if(res.value) args.push('-vf',`scale=${res.value}`);
-      if(fps.value) args.push('-r', fps.value);
-
-      // Audio
-      if(copyAudio.value==='copy'){
-        args.push('-c:a','copy');
-      } else {
-        args.push('-c:a', a, '-b:a', ab.value+'k', '-ar','48000','-ac','2');
-      }
-
-      args.push('output.'+ext);
-      return args;
+    const data = await fetchFile(file.files[0]);
+    const inName = 'input';
+    const { args, ext } = buildCommand();
+    status.textContent = 'Encoding…';
+    ffmpeg.FS('writeFile', inName, data);
+    try{
+      await ffmpeg.run(...args);
+      const outName = 'output.'+ext;
+      const outData = ffmpeg.FS('readFile', outName);
+      const blob = new Blob([outData.buffer], { type: ext==='mp4'?'video/mp4':'video/webm' });
+      link.href = URL.createObjectURL(blob);
+      link.download = outName;
+      out.style.display='flex';
+      size.textContent = 'Size: '+human(blob.size);
+      codecInfo.textContent = 'Format: '+ext.toUpperCase();
+      status.textContent = 'Done.';
+    } catch(err){
+      console.error(err);
+      status.textContent = 'Error: '+err.message;
+    } finally {
+      try{ ffmpeg.FS('unlink','input'); }catch{}
+      try{ ffmpeg.FS('unlink','output.mp4'); }catch{}
+      try{ ffmpeg.FS('unlink','output.webm'); }catch{}
     }
+  }
 
-    function buildCommandAdvanced(ext){
-      const args=['-i','input'];
-      const v=vcodec.value; const q=String(crfAdv.value||22);
-      args.push('-c:v', v);
-      if(v==='libx264' || v==='libx265'){
-        args.push('-crf', q, '-preset', preset.value, '-pix_fmt','yuv420p');
-        if(ext==='mp4') args.push('-movflags','+faststart');
-        if(v==='libx265') args.push('-tag:v','hvc1');
-      } else if(v==='libvpx-vp9'){
-        args.push('-b:v','0','-crf', q);
-      }
-      if(res.value) args.push('-vf',`scale=${res.value}`);
-      if(fps.value) args.push('-r', fps.value);
-      if(copyAudio.value==='copy') args.push('-c:a','copy'); else args.push('-c:a','aac','-b:a',ab.value+'k','-ar','48000','-ac','2');
-      if(extra.value) args.push(...extra.value.split(' ').filter(Boolean));
-      args.push('output.'+ext);
-      return args;
-    }
-
-    function buildCommand(){
-      const ext = formatSel.value;
-      const args = (simple.style.display!=='none') ? buildCommandSimple(ext) : buildCommandAdvanced(ext);
-      cmd.textContent = 'ffmpeg '+args.map(a=> (a.includes(' ') ? '"'+a+'"' : a)).join(' ');
-      return { args, ext };
-    }
-
-    async function run(){
-      if(!file.files[0]){ alert('Choose a video first.'); return; }
-      await ensureFFmpeg();
-      bar.style.width='0%'; out.style.display='none'; codecInfo.textContent=''; size.textContent='';
-
-      const data = await fetchFile(file.files[0]);
-      const inName = 'input';
-      const { args, ext } = buildCommand();
-      status.textContent = 'Encoding…';
-      ffmpeg.FS('writeFile', inName, data);
-      try{
-        await ffmpeg.run(...args);
-        const outName = 'output.'+ext;
-        const outData = ffmpeg.FS('readFile', outName);
-        const blob = new Blob([outData.buffer], { type: ext==='mp4'?'video/mp4':'video/webm' });
-        link.href = URL.createObjectURL(blob);
-        link.download = outName;
-        out.style.display='flex';
-        size.textContent = 'Size: '+human(blob.size);
-        codecInfo.textContent = 'Format: '+ext.toUpperCase();
-        status.textContent = 'Done.';
-      } catch(err){
-        console.error(err);
-        status.textContent = 'Error: '+err.message;
-      } finally {
-        try{ ffmpeg.FS('unlink','input'); }catch{}
-        try{ ffmpeg.FS('unlink','output.mp4'); }catch{}
-        try{ ffmpeg.FS('unlink','output.webm'); }catch{}
-      }
-    }
-
-    start.onclick = run;
-  </script>
+  start.onclick = run;
+</script>
 </body>
 </html>
