@@ -1,39 +1,37 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Simple Video Compressor (FFmpeg.wasm)</title>
-
-  <style>
-    :root { --brand:#00bfa6; --bg:#0e1217; --panel:#141a21; --text:#e5eef7; --muted:#98a2b3; }
-    *{box-sizing:border-box}
-    body { margin:0; font:15px system-ui, -apple-system, Segoe UI, Inter, Roboto, "Helvetica Neue", Arial; color:var(--text); background:var(--bg);}
-    .wrap{ max-width:980px; margin:24px auto; padding:16px;}
-    .card{ background:var(--panel); border:1px solid #223346; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.35); overflow:hidden;}
-    .hd{ display:flex; align-items:center; gap:10px; padding:16px; background:linear-gradient(145deg,var(--brand),#2388ff); font-weight:700;}
-    .bd{ padding:16px;}
-    label{ font-weight:600; font-size:13px; color:var(--muted);}
-    select,input[type="range"],input[type="number"],input[type="file"],button{
-      width:100%; padding:10px 12px; border-radius:12px; border:1px solid #223346; background:#0b141b;
-      color:var(--text); outline:0; 
-    }
-    input[type="range"]{ height:32px; }
-    .row{ display:grid; grid-template-columns:1fr 1fr; gap:12px;}
-    .hint{ font-size:12px; color:var(--muted);}
-    .toggle{ display:flex; gap:8px; margin:8px 0 12px;}
-    .toggle button{ background:transparent; border:1px solid #223346; color:var(--muted); padding:8px 10px; border-radius:8px; cursor:pointer;}
-    .toggle button.active{ background:var(--brand); border-color:transparent; color:#08121a; }
-    .btn{ background:var(--brand); color:#08121a; font-weight:700; border:0; cursor:pointer;}
-    .btn:disabled{ opacity:.5; cursor:not-allowed;}
-    .progress{ height:10px; background:#0b1a28; border:1px solid #223346; border-radius:999px; overflow:hidden; margin-top:8px;}
-    .progress > div{ height:100%; width:0; background:linear-gradient(90deg,var(--brand),#2388ff); transition:width .2s ease;}
-    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
-    .out{ display:none; align-items:center; gap:10px; padding:10px;}
-    .out a{ color:#a2e7ff; text-decoration:none; }
-    .section { margin:14px 0; }
-    @media (max-width:640px){ .row{grid-template-columns:1fr} }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Simple Video Compressor — FFmpeg.wasm</title>
+<style>
+  :root{--brand:#00bfa6;--bg:#0e1217;--panel:#141a21;--text:#e5eef7;--muted:#98a2b3}
+  *{box-sizing:border-box}
+  body{margin:0;font:15px system-ui,-apple-system,Segoe UI,Inter,Roboto,Helvetica,Arial;color:var(--text);background:var(--bg)}
+  .wrap{max-width:980px;margin:24px auto;padding:16px}
+  .card{background:var(--panel);border:1px solid #223346;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);overflow:hidden}
+  .hd{display:flex;align-items:center;gap:10px;padding:16px;background:linear-gradient(145deg,var(--brand),#2388ff);font-weight:700}
+  .bd{padding:16px}
+  label{font-weight:600;font-size:13px;color:var(--muted);display:block;margin:0 0 6px}
+  select,input[type="range"],input[type="file"],button{
+    width:100%;padding:10px 12px;border-radius:12px;border:1px solid #223346;background:#0b141b;color:var(--text);outline:0
+  }
+  input[type="range"]{height:32px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .hint{font-size:12px;color:var(--muted)}
+  .toggle{display:flex;gap:8px;margin:8px 0 12px}
+  .toggle button{background:transparent;border:1px solid #223346;color:var(--muted);padding:8px 10px;border-radius:8px;cursor:pointer}
+  .toggle button.active{background:var(--brand);border-color:transparent;color:#08121a}
+  .btn{background:var(--brand);color:#08121a;font-weight:700;border:0;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .progress{height:10px;background:#0b1a28;border:1px solid #223346;border-radius:999px;overflow:hidden;margin-top:8px;pointer-events:none}
+  .progress>div{height:100%;width:0;background:linear-gradient(90deg,var(--brand),#2388ff);transition:width .2s ease}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+  .out{display:none;align-items:center;gap:10px;padding:10px}
+  .out a{color:#a2e7ff;text-decoration:none}
+  .section{margin:14px 0}
+  @media (max-width:640px){.row{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
   <div class="wrap">
@@ -49,8 +47,8 @@
         <div class="section">
           <label>Mode</label>
           <div class="toggle">
-            <button id="mode-simple" class="active">Simple</button>
-            <button id="mode-adv">Advanced</button>
+            <button id="mode-simple" type="button" class="active">Simple</button>
+            <button id="mode-adv" type="button">Advanced</button>
           </div>
         </div>
 
@@ -60,9 +58,9 @@
             <div>
               <label>Preset</label>
               <select id="preset">
-                <option value="libx264-crf23">H.264 (CRF 23)</option>
-                <option value="libx265-crf28">H.265 (CRF 28)</option>
-                <option value="libvpx-vp9-crf33">VP9 (CRF 33)</option>
+                <option value="libx264">H.264 (CRF 23)</option>
+                <option value="libx265">H.265 (CRF 28)</option>
+                <option value="libvpx-vp9">VP9 (CRF 33)</option>
               </select>
             </div>
             <div>
@@ -75,9 +73,9 @@
           </div>
 
           <div class="section">
-            <label>Quality (CRF) — lower = better</label>
+            <label>Quality (CRF) — lower = better <span id="crf-val" class="mono">28</span></label>
             <input id="crf" type="range" min="18" max="40" step="1" value="28" />
-            <div class="hint">Typical 18–30. Default depends on preset. <span id="crf-val" class="mono">28</span></div>
+            <div class="hint">Typical 18–30. Default depends on preset.</div>
           </div>
 
           <div class="section row">
@@ -94,9 +92,7 @@
               <label>Frame Rate</label>
               <select id="fps">
                 <option value="">Keep</option>
-                <option>24</option>
-                <option>25</option>
-                <option>30</option>
+                <option>24</option><option>25</option><option>30</option>
               </select>
             </div>
           </div>
@@ -111,8 +107,8 @@
               </select>
             </div>
             <div>
-              <label>—</label>
-              <button id="start" class="btn">Start Compress</button>
+              <label>&nbsp;</label>
+              <button id="start" type="button" class="btn">Start Compress</button>
             </div>
           </div>
 
@@ -136,155 +132,107 @@
         <!-- ADVANCED -->
         <div id="advanced" style="display:none;">
           <div class="section">
-            <label>Custom command (without “ffmpeg”)</label>
+            <label>Custom command (no “ffmpeg”)</label>
             <input id="adv-cmd" type="text" placeholder='-i INPUT -c:v libx264 -crf 23 OUTPUT.mp4' />
             <p class="hint">Use INPUT / OUTPUT placeholders if you like.</p>
           </div>
-          <button id="run-adv" class="btn">Run Advanced</button>
+          <button id="run-adv" type="button" class="btn">Run Advanced</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- JS (all in /js). jQuery/SweetAlert/Bootstrap are optional, but used here for UX. -->
-  <script src="./js/jquery-3.7.1.min.js"></script>
-  <script src="./js/bootstrap.bundle.min.js"></script>
-  <script src="./js/sweetalert2.min.js"></script>
-
-  <!-- FFmpeg UMD wrapper from CDN (safe to keep). If you prefer local, put ffmpeg.min.js in /js and change src. -->
+  <!-- FFmpeg UMD (global FFmpeg) -->
   <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js"></script>
-
   <script>
-    // get createFFmpeg & fetchFile from UMD global
-    const { createFFmpeg, fetchFile } = FFmpeg;
-
-    const $id = (sel) => document.getElementById(sel);
+  window.addEventListener('DOMContentLoaded', () => {
+    const $ = id => document.getElementById(id);
     const els = {
-      file: $id('file'),
-      start: $id('start'),
-      modeSimple: $id('mode-simple'),
-      modeAdv: $id('mode-adv'),
-      simple: $id('simple'),
-      advanced: $id('advanced'),
-      crf: $id('crf'),
-      crfVal: $id('crf-val'),
-      preset: $id('preset'),
-      format: $id('format'),
-      scale: $id('scale'),
-      fps: $id('fps'),
-      audio: $id('audio'),
-      status: $id('status'),
-      bar: $id('bar'),
-      out: $id('out'),
-      dl: $id('download'),
-      size: $id('size'),
-      cmdWrap: $id('cmdWrap'),
-      cmd: $id('cmd'),
-      runAdv: $id('run-adv'),
-      advCmd: $id('adv-cmd'),
+      file: $('file'), start: $('start'),
+      modeSimple: $('mode-simple'), modeAdv: $('mode-adv'),
+      simple: $('simple'), advanced: $('advanced'),
+      crf: $('crf'), crfVal: $('crf-val'),
+      preset: $('preset'), format: $('format'),
+      scale: $('scale'), fps: $('fps'), audio: $('audio'),
+      status: $('status'), bar: $('bar'), out: $('out'),
+      dl: $('download'), size: $('size'),
+      cmdWrap: $('cmdWrap'), cmd: $('cmd'),
+      runAdv: $('run-adv'), advCmd: $('adv-cmd')
     };
 
-    let ffmpeg;
-    let coreLoaded = false;
+    // UI
+    const setMode = m => {
+      const simple = m === 'simple';
+      els.modeSimple.classList.toggle('active', simple);
+      els.modeAdv.classList.toggle('active', !simple);
+      els.simple.style.display = simple ? '' : 'none';
+      els.advanced.style.display = simple ? 'none' : '';
+    };
+    els.modeSimple.addEventListener('click', () => setMode('simple'));
+    els.modeAdv.addEventListener('click', () => setMode('adv'));
+    els.crf.addEventListener('input', () => els.crfVal.textContent = els.crf.value);
+    const log = t => els.status.textContent = t;
+    const prog = r => els.bar.style.width = (Math.max(0, Math.min(1, r || 0))*100)+'%';
 
-    function setMode(which){
-      if(which==='simple'){
-        els.modeSimple.classList.add('active');
-        els.modeAdv.classList.remove('active');
-        els.simple.style.display = '';
-        els.advanced.style.display = 'none';
-      }else{
-        els.modeAdv.classList.add('active');
-        els.modeSimple.classList.remove('active');
-        els.simple.style.display = 'none';
-        els.advanced.style.display = '';
-      }
-    }
-    els.modeSimple.onclick = ()=>setMode('simple');
-    els.modeAdv.onclick = ()=>setMode('adv');
-
-    els.crf.addEventListener('input', ()=> els.crfVal.textContent = els.crf.value);
-    function logStatus(msg){ els.status.textContent = msg; }
-    function setProgress(ratio){ els.bar.style.width = (Math.max(0,Math.min(1,ratio))*100)+'%'; }
-
+    // FFmpeg init with local->CDN fallback
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    let ffmpeg, loaded = false;
     async function ensureFFmpeg(){
-      if(coreLoaded) return;
-      // try local core first (expects /js/ffmpeg-core.{js,wasm,worker.js})
-      ffmpeg = createFFmpeg({
-        log:false,
-        corePath:'./js/ffmpeg-core.js',
-        progress: ({ratio}) => setProgress(ratio || 0)
-      });
-      logStatus('Loading FFmpeg core…');
-      try{
+      if (loaded) return;
+      log('Loading FFmpeg core…');
+      try {
+        ffmpeg = createFFmpeg({ log:false, corePath:'./js/ffmpeg-core.js', progress: ({ratio}) => prog(ratio) });
         await ffmpeg.load();
-      }catch(e){
-        console.warn('Local core failed, using CDN…', e);
-        ffmpeg = createFFmpeg({
-          log:false,
-          corePath:'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js',
-          progress: ({ratio}) => setProgress(ratio || 0)
-        });
+      } catch (e) {
+        console.warn('Local core missing, use CDN', e);
+        ffmpeg = createFFmpeg({ log:false, corePath:'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js', progress: ({ratio}) => prog(ratio) });
         await ffmpeg.load();
       }
-      coreLoaded = true;
-      logStatus('FFmpeg ready.');
+      loaded = true;
+      log('FFmpeg ready.');
     }
 
-    function buildArgsSimple(inputName, outputName){
-      const [vCodec, defaultCrf] = (() => {
-        switch(els.preset.value){
-          case 'libx265-crf28': return ['libx265', 28];
-          case 'libvpx-vp9-crf33': return ['libvpx-vp9', 33];
-          default: return ['libx264', 23];
-        }
-      })();
-      const crfVal = els.crf.value || defaultCrf;
-      const args = ['-i', inputName, '-y'];
+    function showCmd(args){
+      els.cmd.textContent = ['ffmpeg'].concat(args.map(a => a.includes(' ')?`"${a}"`:a)).join(' ');
+      els.cmdWrap.style.display = '';
+    }
 
-      args.push('-c:v', vCodec);
-      if(vCodec==='libvpx-vp9'){ args.push('-b:v','0'); } // VP9 CRF
-      args.push('-crf', String(crfVal));
+    function buildArgsSimple(inputName){
+      let v = els.preset.value, crfDefault = 23;
+      if (v === 'libx265') crfDefault = 28;
+      if (v === 'libvpx-vp9') crfDefault = 33;
 
-      if(els.scale.value){ args.push('-vf', `scale=${els.scale.value}`); }
-      if(els.fps.value){ args.push('-r', els.fps.value); }
+      const crf = els.crf.value || crfDefault;
+      const args = ['-i', inputName, '-y', '-c:v', v, '-crf', String(crf)];
+      if (v === 'libvpx-vp9') args.push('-b:v', '0'); // VP9 CRF mode
 
-      if(els.audio.value==='none'){ args.push('-an'); }
-      else if(els.audio.value==='copy'){ args.push('-c:a','copy'); }
-      else { args.push('-c:a','aac','-b:a','96k'); }
+      if (els.scale.value) args.push('-vf', `scale=${els.scale.value}`);
+      if (els.fps.value)   args.push('-r', els.fps.value);
 
-      const ext = els.format.value==='webm' ? 'webm' : 'mp4';
-      const out = outputName.endsWith(`.${ext}`) ? outputName : `output.${ext}`;
+      if (els.audio.value === 'none') args.push('-an');
+      else if (els.audio.value === 'copy') args.push('-c:a','copy');
+      else args.push('-c:a','aac','-b:a','96k');
+
+      const ext = els.format.value === 'webm' ? 'webm' : 'mp4';
+      const out = `output.${ext}`;
       args.push(out);
       return { args, out };
     }
 
-    function showCmd(args){
-      els.cmd.textContent = ['ffmpeg'].concat(args.map(a => a.includes(' ') ? `"${a}"` : a)).join(' ');
-      els.cmdWrap.style.display = '';
-    }
-
     async function runSimple(){
       const file = els.file.files[0];
-      if(!file){ return Swal.fire('Pick a video first'); }
-
+      if(!file){ alert('Pick a video first.'); return; }
       await ensureFFmpeg();
-      setProgress(0);
-      els.out.style.display = 'none';
 
-      const inputName = 'input.' + (file.name.split('.').pop() || 'mp4');
-      const { args, out } = buildArgsSimple(inputName, 'output.mp4');
-      showCmd(args);
-
+      prog(0); els.out.style.display = 'none';
+      const inputName = 'input.' + (file.name.split('.').pop()||'mp4');
       ffmpeg.FS('writeFile', inputName, await fetchFile(file));
-      logStatus('Compressing…');
-      try{
-        await ffmpeg.run(...args);
-      }catch(err){
-        console.error(err);
-        Swal.fire('FFmpeg error', String(err), 'error');
-        return;
-      }
+
+      const { args, out } = buildArgsSimple(inputName);
+      showCmd(args);
+      log('Compressing…');
+      try { await ffmpeg.run(...args); }
+      catch(err){ console.error(err); alert('FFmpeg error: ' + err); return; }
 
       const data = ffmpeg.FS('readFile', out);
       const blob = new Blob([data.buffer], { type: out.endsWith('.webm') ? 'video/webm' : 'video/mp4' });
@@ -292,28 +240,26 @@
       els.dl.href = url; els.dl.download = out;
       els.size.textContent = `(${(blob.size/1024/1024).toFixed(2)} MB)`;
       els.out.style.display = 'flex';
-      logStatus('Done.');
+      log('Done.');
     }
 
     async function runAdvanced(){
       const file = els.file.files[0];
-      if(!file){ return Swal.fire('Pick a video first'); }
-      const cmdLine = els.advCmd.value.trim();
-      if(!cmdLine){ return Swal.fire('Enter a command'); }
-
+      if(!file){ alert('Pick a video first.'); return; }
+      const cmdLine = (els.advCmd.value||'').trim();
+      if(!cmdLine){ alert('Enter a command.'); return; }
       await ensureFFmpeg();
-      setProgress(0);
-      els.out.style.display = 'none';
 
-      const inputName = 'input.' + (file.name.split('.').pop() || 'mp4');
+      prog(0); els.out.style.display = 'none';
+      const inputName = 'input.' + (file.name.split('.').pop()||'mp4');
       ffmpeg.FS('writeFile', inputName, await fetchFile(file));
 
       const expanded = cmdLine.replace(/\bINPUT\b/g, inputName).replace(/\bOUTPUT\b/g, 'output.mp4');
       const args = expanded.split(/\s+/).filter(Boolean);
       showCmd(args);
-
-      try{ await ffmpeg.run(...args); }
-      catch(err){ console.error(err); return Swal.fire('FFmpeg error', String(err), 'error'); }
+      log('Running…');
+      try { await ffmpeg.run(...args); }
+      catch(err){ console.error(err); alert('FFmpeg error: ' + err); return; }
 
       const outName = args[args.length-1] || 'output.mp4';
       const data = ffmpeg.FS('readFile', outName);
@@ -322,12 +268,14 @@
       els.dl.href = url; els.dl.download = outName;
       els.size.textContent = `(${(blob.size/1024/1024).toFixed(2)} MB)`;
       els.out.style.display = 'flex';
-      logStatus('Done.');
+      log('Done.');
     }
 
-    els.start.onclick = runSimple;
-    els.runAdv.onclick = runAdvanced;
-    $('#file').on('change', () => { els.out.style.display='none'; setProgress(0); logStatus('Ready.'); });
+    // Bind
+    els.start.addEventListener('click', runSimple);
+    els.runAdv.addEventListener('click', runAdvanced);
+    els.file.addEventListener('change', () => { els.out.style.display='none'; prog(0); log('Ready.'); });
+  });
   </script>
 </body>
 </html>
