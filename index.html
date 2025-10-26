@@ -209,9 +209,23 @@
 
     async function ensureFFmpeg(){
       if(coreLoaded) return;
-      ffmpeg = createFFmpeg({ log: false, progress: ({ ratio }) => setProgress(ratio || 0) });
-      logStatus('Loading FFmpeg core…');
-      await ffmpeg.load();
+      ffmpeg = createFFmpeg({ log: false, corePath: './ffmpeg-core.js', progress: ({ ratio }) => setProgress(ratio || 0) });
+      logStatus('Loading FFmpeg core (local)…');
+      try {
+        await ffmpeg.load();
+      } catch (e) {
+        console.error(e);
+        logStatus('Failed to load local core. Falling back to CDN…');
+        try {
+          ffmpeg = createFFmpeg({ log: false, corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js', progress: ({ ratio }) => setProgress(ratio || 0) });
+          await ffmpeg.load();
+        } catch (e2) {
+          console.error(e2);
+          logStatus('FFmpeg failed to load.');
+          Swal.fire('Could not load FFmpeg core', 'Place ffmpeg-core.js / ffmpeg-core.wasm / ffmpeg-core.worker.js next to index.html, or allow CDN access.', 'error');
+          throw e2;
+        }
+      }
       coreLoaded = true;
       logStatus('FFmpeg ready.');
     }
