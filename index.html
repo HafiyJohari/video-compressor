@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Simple Video Compressor (FFmpeg.wasm)</title>
 
-  <!-- Basic styles; keep or swap with your own -->
   <style>
     :root { --brand:#00bfa6; --bg:#0e1217; --panel:#141a21; --text:#e5eef7; --muted:#98a2b3; }
+    *{box-sizing:border-box}
     body { margin:0; font:15px system-ui, -apple-system, Segoe UI, Inter, Roboto, "Helvetica Neue", Arial; color:var(--text); background:var(--bg);}
     .wrap{ max-width:980px; margin:24px auto; padding:16px;}
     .card{ background:var(--panel); border:1px solid #223346; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.35); overflow:hidden;}
@@ -16,7 +16,7 @@
     label{ font-weight:600; font-size:13px; color:var(--muted);}
     select,input[type="range"],input[type="number"],input[type="file"],button{
       width:100%; padding:10px 12px; border-radius:12px; border:1px solid #223346; background:#0b141b;
-      color:var(--text); outline:0; box-sizing:border-box;
+      color:var(--text); outline:0; 
     }
     input[type="range"]{ height:32px; }
     .row{ display:grid; grid-template-columns:1fr 1fr; gap:12px;}
@@ -32,6 +32,7 @@
     .out{ display:none; align-items:center; gap:10px; padding:10px;}
     .out a{ color:#a2e7ff; text-decoration:none; }
     .section { margin:14px 0; }
+    @media (max-width:640px){ .row{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
@@ -136,7 +137,8 @@
         <div id="advanced" style="display:none;">
           <div class="section">
             <label>Custom command (without “ffmpeg”)</label>
-            <input id="adv-cmd" type="text" placeholder='-i input.mp4 -c:v libx264 -crf 23 output.mp4' />
+            <input id="adv-cmd" type="text" placeholder='-i INPUT -c:v libx264 -crf 23 OUTPUT.mp4' />
+            <p class="hint">Use INPUT / OUTPUT placeholders if you like.</p>
           </div>
           <button id="run-adv" class="btn">Run Advanced</button>
         </div>
@@ -144,39 +146,42 @@
     </div>
   </div>
 
-  <!-- Your local libraries (order matters) -->
-  <script src="./jquery-3.7.1.min.js"></script>
-  <script src="./bootstrap.bundle.min.js"></script>
-  <script src="./sweetalert2.min.js"></script>
-  <script src="./ffmpeg.min.js"></script>
+  <!-- JS (all in /js). jQuery/SweetAlert/Bootstrap are optional, but used here for UX. -->
+  <script src="./js/jquery-3.7.1.min.js"></script>
+  <script src="./js/bootstrap.bundle.min.js"></script>
+  <script src="./js/sweetalert2.min.js"></script>
+
+  <!-- FFmpeg UMD wrapper from CDN (safe to keep). If you prefer local, put ffmpeg.min.js in /js and change src. -->
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js"></script>
 
   <script>
-    // Pull createFFmpeg & fetchFile from the UMD global exposed by ffmpeg.min.js
+    // get createFFmpeg & fetchFile from UMD global
     const { createFFmpeg, fetchFile } = FFmpeg;
 
+    const $id = (sel) => document.getElementById(sel);
     const els = {
-      file: $('#file')[0],
-      start: $('#start')[0],
-      modeSimple: $('#mode-simple')[0],
-      modeAdv: $('#mode-adv')[0],
-      simple: $('#simple')[0],
-      advanced: $('#advanced')[0],
-      crf: $('#crf')[0],
-      crfVal: $('#crf-val')[0],
-      preset: $('#preset')[0],
-      format: $('#format')[0],
-      scale: $('#scale')[0],
-      fps: $('#fps')[0],
-      audio: $('#audio')[0],
-      status: $('#status')[0],
-      bar: $('#bar')[0],
-      out: $('#out')[0],
-      dl: $('#download')[0],
-      size: $('#size')[0],
-      cmdWrap: $('#cmdWrap')[0],
-      cmd: $('#cmd')[0],
-      runAdv: $('#run-adv')[0],
-      advCmd: $('#adv-cmd')[0]
+      file: $id('file'),
+      start: $id('start'),
+      modeSimple: $id('mode-simple'),
+      modeAdv: $id('mode-adv'),
+      simple: $id('simple'),
+      advanced: $id('advanced'),
+      crf: $id('crf'),
+      crfVal: $id('crf-val'),
+      preset: $id('preset'),
+      format: $id('format'),
+      scale: $id('scale'),
+      fps: $id('fps'),
+      audio: $id('audio'),
+      status: $id('status'),
+      bar: $id('bar'),
+      out: $id('out'),
+      dl: $id('download'),
+      size: $id('size'),
+      cmdWrap: $id('cmdWrap'),
+      cmd: $id('cmd'),
+      runAdv: $id('run-adv'),
+      advCmd: $id('adv-cmd'),
     };
 
     let ffmpeg;
@@ -195,79 +200,60 @@
         els.advanced.style.display = '';
       }
     }
-
     els.modeSimple.onclick = ()=>setMode('simple');
     els.modeAdv.onclick = ()=>setMode('adv');
 
-    // Live CRF label
     els.crf.addEventListener('input', ()=> els.crfVal.textContent = els.crf.value);
-
     function logStatus(msg){ els.status.textContent = msg; }
-    function setProgress(ratio){
-      els.bar.style.width = (Math.max(0, Math.min(1, ratio))*100) + '%';
-    }
+    function setProgress(ratio){ els.bar.style.width = (Math.max(0,Math.min(1,ratio))*100)+'%'; }
 
     async function ensureFFmpeg(){
       if(coreLoaded) return;
-      ffmpeg = createFFmpeg({ log: false, corePath: './ffmpeg-core.js', progress: ({ ratio }) => setProgress(ratio || 0) });
-      logStatus('Loading FFmpeg core (local)…');
-      try {
+      // try local core first (expects /js/ffmpeg-core.{js,wasm,worker.js})
+      ffmpeg = createFFmpeg({
+        log:false,
+        corePath:'./js/ffmpeg-core.js',
+        progress: ({ratio}) => setProgress(ratio || 0)
+      });
+      logStatus('Loading FFmpeg core…');
+      try{
         await ffmpeg.load();
-      } catch (e) {
-        console.error(e);
-        logStatus('Failed to load local core. Falling back to CDN…');
-        try {
-          ffmpeg = createFFmpeg({ log: false, corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js', progress: ({ ratio }) => setProgress(ratio || 0) });
-          await ffmpeg.load();
-        } catch (e2) {
-          console.error(e2);
-          logStatus('FFmpeg failed to load.');
-          Swal.fire('Could not load FFmpeg core', 'Place ffmpeg-core.js / ffmpeg-core.wasm / ffmpeg-core.worker.js next to index.html, or allow CDN access.', 'error');
-          throw e2;
-        }
+      }catch(e){
+        console.warn('Local core failed, using CDN…', e);
+        ffmpeg = createFFmpeg({
+          log:false,
+          corePath:'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js',
+          progress: ({ratio}) => setProgress(ratio || 0)
+        });
+        await ffmpeg.load();
       }
       coreLoaded = true;
       logStatus('FFmpeg ready.');
     }
 
-    // Build args for "Simple" mode
     function buildArgsSimple(inputName, outputName){
-      const [vCodec, defaultCrf] = (()=>{
+      const [vCodec, defaultCrf] = (() => {
         switch(els.preset.value){
           case 'libx265-crf28': return ['libx265', 28];
           case 'libvpx-vp9-crf33': return ['libvpx-vp9', 33];
           default: return ['libx264', 23];
         }
       })();
-
       const crfVal = els.crf.value || defaultCrf;
       const args = ['-i', inputName, '-y'];
 
-      // Video codec + quality
       args.push('-c:v', vCodec);
-      if(vCodec === 'libvpx-vp9'){ args.push('-b:v','0'); } // recommended for VP9 CRF mode
+      if(vCodec==='libvpx-vp9'){ args.push('-b:v','0'); } // VP9 CRF
       args.push('-crf', String(crfVal));
 
-      // Optional scale
-      if(els.scale.value){
-        args.push('-vf', `scale=${els.scale.value}`);
-      }
-      // Optional fps
-      if(els.fps.value){
-        args.push('-r', els.fps.value);
-      }
-      // Audio
-      if(els.audio.value === 'none'){
-        args.push('-an');
-      } else if(els.audio.value === 'copy'){
-        args.push('-c:a', 'copy');
-      } else {
-        // aac-96k
-        args.push('-c:a', 'aac', '-b:a', '96k');
-      }
+      if(els.scale.value){ args.push('-vf', `scale=${els.scale.value}`); }
+      if(els.fps.value){ args.push('-r', els.fps.value); }
 
-      // Format/container
-      const ext = els.format.value.toLowerCase() === 'webm' ? 'webm' : 'mp4';
+      if(els.audio.value==='none'){ args.push('-an'); }
+      else if(els.audio.value==='copy'){ args.push('-c:a','copy'); }
+      else { args.push('-c:a','aac','-b:a','96k'); }
+
+      const ext = els.format.value==='webm' ? 'webm' : 'mp4';
       const out = outputName.endsWith(`.${ext}`) ? outputName : `output.${ext}`;
       args.push(out);
       return { args, out };
@@ -290,7 +276,6 @@
       const { args, out } = buildArgsSimple(inputName, 'output.mp4');
       showCmd(args);
 
-      // Write input, run, read output
       ffmpeg.FS('writeFile', inputName, await fetchFile(file));
       logStatus('Compressing…');
       try{
@@ -302,10 +287,9 @@
       }
 
       const data = ffmpeg.FS('readFile', out);
-      const blob = new Blob([data.buffer], { type: (out.endsWith('.webm') ? 'video/webm' : 'video/mp4') });
+      const blob = new Blob([data.buffer], { type: out.endsWith('.webm') ? 'video/webm' : 'video/mp4' });
       const url = URL.createObjectURL(blob);
-      els.dl.href = url;
-      els.dl.download = out;
+      els.dl.href = url; els.dl.download = out;
       els.size.textContent = `(${(blob.size/1024/1024).toFixed(2)} MB)`;
       els.out.style.display = 'flex';
       logStatus('Done.');
@@ -324,29 +308,18 @@
       const inputName = 'input.' + (file.name.split('.').pop() || 'mp4');
       ffmpeg.FS('writeFile', inputName, await fetchFile(file));
 
-      // Replace placeholders if used
-      const expanded = cmdLine
-        .replace(/\bINPUT\b/g, inputName)
-        .replace(/\bOUTPUT\b/g, 'output.mp4');
-
-      // Split args (very simple split; quote-aware parsing would be overkill here)
+      const expanded = cmdLine.replace(/\bINPUT\b/g, inputName).replace(/\bOUTPUT\b/g, 'output.mp4');
       const args = expanded.split(/\s+/).filter(Boolean);
       showCmd(args);
 
-      try{
-        await ffmpeg.run(...args);
-      }catch(err){
-        console.error(err);
-        Swal.fire('FFmpeg error', String(err), 'error');
-        return;
-      }
+      try{ await ffmpeg.run(...args); }
+      catch(err){ console.error(err); return Swal.fire('FFmpeg error', String(err), 'error'); }
 
       const outName = args[args.length-1] || 'output.mp4';
       const data = ffmpeg.FS('readFile', outName);
       const blob = new Blob([data.buffer], { type: outName.endsWith('.webm') ? 'video/webm' : 'video/mp4' });
       const url = URL.createObjectURL(blob);
-      els.dl.href = url;
-      els.dl.download = outName;
+      els.dl.href = url; els.dl.download = outName;
       els.size.textContent = `(${(blob.size/1024/1024).toFixed(2)} MB)`;
       els.out.style.display = 'flex';
       logStatus('Done.');
@@ -354,8 +327,6 @@
 
     els.start.onclick = runSimple;
     els.runAdv.onclick = runAdvanced;
-
-    // Small UX niceties
     $('#file').on('change', () => { els.out.style.display='none'; setProgress(0); logStatus('Ready.'); });
   </script>
 </body>
