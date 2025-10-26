@@ -3,166 +3,365 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Simple Video Compressor</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <title>Simple Video Compressor (FFmpeg.wasm)</title>
   <style>
-    :root{--bg:#0b0c10;--card:#141822;--border:rgba(255,255,255,.1);--txt:#e6eaf1;--muted:#9aa7b5;--hi:#39e7ff}
+    :root{
+      --brand:#00B8A9; /* turquoise */
+      --brand-2:#FFD166; /* warm yellow */
+      --bg:#0d0f12; --panel:#141821; --text:#ebf1ff; --muted:#9aa7bf;
+      --ring:#274b5d; --stroke:#1f2731; --shadow:0 18px 50px rgba(0,0,0,.35);
+      --radius:16px;
+    }
     *{box-sizing:border-box}
-    html,body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    .wrap{max-width:760px;margin:0 auto;padding:28px 16px 60px}
-    h1{margin:6px 0 18px;font-size:clamp(22px,6vw,40px)}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px}
-    .drop{display:grid;place-items:center;border:2px dashed var(--border);border-radius:14px;padding:30px;min-height:150px;text-align:center}
-    .drop.drag{border-color:var(--hi)}
-    .big{display:inline-flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;border:1px solid var(--border);background:#10141e;color:#fff;text-decoration:none;font-weight:600;cursor:pointer}
-    .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
-    .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;border:1px solid var(--border);cursor:pointer;user-select:none}
-    .pill input{accent-color:#00e5ff}
-    input[type=number],input[type=text],select{background:#0f1320;color:#f1f5fb;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
-    .progress{height:10px;background:#0f1320;border:1px solid var(--border);border-radius:999px;overflow:hidden}
-    .bar{height:100%;background:linear-gradient(90deg,#00e5ff,#ff4aa2);width:0%}
-    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
-    .muted{color:var(--muted)}
-    .actions{display:flex;gap:10px;align-items:center;margin-top:12px}
-    button.primary{padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:#0d93b5;color:#fff;font-weight:700}
-    button.primary[disabled]{opacity:.6}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui, -apple-system, Segoe UI, Inter, Roboto, "Helvetica Neue", Arial}
+    .wrap{max-width:980px;margin:24px auto;padding:0 16px}
+    .card{background:var(--panel);border:1px solid var(--stroke);border-radius:24px;box-shadow:var(--shadow)}
+    .row{display:grid;gap:16px;padding:16px}
+    .row.cols{grid-template-columns:repeat(12,1fr)}
+    .h{padding:16px 18px;border-bottom:1px solid var(--stroke);display:flex;align-items:center;gap:10px}
+    .h h1{font-size:18px;margin:0}
+    .badge{margin-left:auto;background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#0a0a0a;font-weight:700;padding:6px 10px;border-radius:999px}
+
+    label{font-weight:600;font-size:13px;color:var(--muted)}
+    select,input[type="range"],input[type="number"],input[type="file"],button{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #223246;background:#0e141b;color:var(--text);outline:2px solid transparent;outline-offset:2px}
+    select:focus,input:focus,button:focus{outline-color:var(--ring)}
+    input[type="range"]{padding:0;height:32px}
+    .hint{font-size:12px;color:var(--muted)}
+
+    .toggle{display:flex;gap:8px;background:#0e141b;border:1px solid #223246;border-radius:12px;padding:6px}
+    .toggle button{background:transparent;border:none;color:var(--muted);padding:8px 10px;border-radius:8px;cursor:pointer}
+    .toggle button.active{background:#11202c;color:#e9f4ff}
+
+    .btn{background:var(--brand);color:#0b0b0b;font-weight:800;border:none;cursor:pointer}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+
+    .progress{height:10px;background:#0e141b;border:1px solid #223246;border-radius:999px;overflow:hidden}
+    .progress>div{height:100%;width:0%;background:linear-gradient(90deg,var(--brand),var(--brand-2));transition:width .2s ease}
+
+    .out{display:flex;align-items:center;gap:10px}
+    .pill{border:1px solid #2a394a;border-radius:999px;padding:6px 10px;font-size:12px;color:#d6e2f2}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
+    details{background:#0e141b;border:1px solid #223246;border-radius:12px;padding:8px}
+    summary{cursor:pointer}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Simple Video Compressor</h1>
     <div class="card">
-      <div id="drop" class="drop">
-        <div>
-          <div style="font-weight:700">Drag & drop a video (MP4/MOV/WebM)</div>
-          <div class="muted" style="margin:6px 0 10px">Tip: 720p is usually enough for web backgrounds.</div>
-          <label class="big">
-            Choose file
-            <input id="file" type="file" accept="video/*" hidden />
-          </label>
-          <div id="fname" class="muted" style="margin-top:6px"></div>
-        </div>
+      <div class="h">
+        <h1>Simple Video Compressor</h1>
+        <span class="badge">FFmpeg.wasm</span>
       </div>
 
-      <div class="row" style="margin-top:16px">
-        <label class="pill"><input type="radio" name="preset" value="mp4-720" checked> MP4 • 720p (H.264)</label>
-        <label class="pill"><input type="radio" name="preset" value="mp4-1080"> MP4 • 1080p (H.264)</label>
-        <label class="pill"><input type="radio" name="preset" value="webm-720"> WebM • 720p (VP9)</label>
-        <label class="pill"><input type="radio" name="preset" value="custom"> Custom</label>
-      </div>
-
-      <div class="row">
-        <div>
-          <div class="muted mono">Width × Height</div>
-          <input id="w" type="number" value="1280" style="width:96px"> ×
-          <input id="h" type="number" value="720" style="width:96px">
+      <div class="row cols">
+        <div class="col" style="grid-column: span 12;">
+          <label for="file">Source Video</label>
+          <input id="file" type="file" accept="video/*" />
+          <div class="hint">MP4/MOV/WebM etc. are okay. All processing happens in your browser.</div>
         </div>
-        <div>
-          <div class="muted mono">Video bitrate</div>
-          <input id="vb" type="text" value="4M" style="width:120px">
+
+        <div class="col" style="grid-column: span 12;">
+          <label>Mode</label>
+          <div class="toggle" role="tablist">
+            <button id="modeSimple" class="active" role="tab">Simple</button>
+            <button id="modeAdv" role="tab">Advanced</button>
+          </div>
         </div>
-        <div>
-          <div class="muted mono">Format</div>
-          <select id="fmt"><option value="mp4">mp4</option><option value="webm">webm</option></select>
+
+        <!-- Simple Mode -->
+        <div id="simple" class="col" style="grid-column: span 12;">
+          <div class="row cols">
+            <div class="col" style="grid-column: span 6;">
+              <label for="presetSimple">Preset</label>
+              <select id="presetSimple">
+                <option value="keep">Keep Quality (x264 CRF 22)</option>
+                <option value="smaller">Smaller File (x264 CRF 26, slow)</option>
+                <option value="social">Social/Web (x264 CRF 24, 720p if bigger)</option>
+                <option value="hevc">High Efficiency (x265 CRF 28)</option>
+                <option value="vp9">WebM VP9 (CRF 33)</option>
+              </select>
+            </div>
+            <div class="col" style="grid-column: span 6;">
+              <label for="format">Format</label>
+              <select id="format">
+                <option value="mp4">MP4</option>
+                <option value="webm">WebM</option>
+              </select>
+            </div>
+
+            <div class="col" style="grid-column: span 12;">
+              <label for="crf">Quality (CRF) <span class="hint">Lower = better quality. Typical 18–30. Default depends on preset.</span></label>
+              <input id="crf" type="range" min="18" max="30" step="1" value="22" />
+            </div>
+
+            <div class="col" style="grid-column: span 6;">
+              <label for="resolution">Resolution</label>
+              <select id="resolution">
+                <option value="">Same as source</option>
+                <option value="3840:-2">4K (2160p)</option>
+                <option value="2560:-2">1440p</option>
+                <option value="1920:-2">1080p</option>
+                <option value="1280:-2">720p</option>
+                <option value="854:-2">480p</option>
+              </select>
+            </div>
+            <div class="col" style="grid-column: span 6;">
+              <label for="fps">Frame Rate</label>
+              <select id="fps">
+                <option value="">Same as source</option>
+                <option value="24">24</option>
+                <option value="25">25</option>
+                <option value="30">30</option>
+                <option value="50">50</option>
+                <option value="60">60</option>
+              </select>
+            </div>
+
+            <div class="col" style="grid-column: span 6;">
+              <label for="ab">Audio Bitrate</label>
+              <select id="ab">
+                <option value="128">128k (default)</option>
+                <option value="96">96k</option>
+                <option value="160">160k</option>
+                <option value="192">192k</option>
+              </select>
+            </div>
+            <div class="col" style="grid-column: span 6;">
+              <label for="copyAudio">Audio</label>
+              <select id="copyAudio">
+                <option value="aac">Encode AAC</option>
+                <option value="copy">Copy (no re-encode)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Advanced Mode -->
+        <div id="advanced" class="col" style="grid-column: span 12; display:none;">
+          <div class="row cols">
+            <div class="col" style="grid-column: span 4;">
+              <label for="vcodec">Video Codec</label>
+              <select id="vcodec">
+                <option value="libx264">libx264 (H.264)</option>
+                <option value="libx265">libx265 (H.265)</option>
+                <option value="libvpx-vp9">libvpx-vp9 (VP9)</option>
+              </select>
+            </div>
+            <div class="col" style="grid-column: span 4;">
+              <label for="preset">Encoder Preset</label>
+              <select id="preset">
+                <option>medium</option>
+                <option>slow</option>
+                <option>faster</option>
+                <option>veryfast</option>
+              </select>
+            </div>
+            <div class="col" style="grid-column: span 4;">
+              <label for="crfAdv">CRF</label>
+              <input id="crfAdv" type="number" min="0" max="51" value="22" />
+            </div>
+            <div class="col" style="grid-column: span 12;">
+              <label for="extra">Extra FFmpeg args (optional)</label>
+              <input id="extra" placeholder="e.g. -t 10 to test 10 sec" />
+            </div>
+          </div>
+        </div>
+
+        <div class="col" style="grid-column: span 12;">
+          <button id="start" class="btn">Start Compress</button>
+        </div>
+
+        <div class="col" style="grid-column: span 12;">
+          <div class="progress"><div id="bar"></div></div>
+          <div class="hint" id="status" style="margin-top:8px">Idle.</div>
+        </div>
+
+        <div class="col out" style="grid-column: span 12; display:none;" id="out">
+          <a id="download" class="btn" download>Download</a>
+          <span class="pill mono" id="size"></span>
+          <span class="pill" id="codecInfo"></span>
+        </div>
+
+        <div class="col" style="grid-column: span 12;">
+          <details>
+            <summary>Show FFmpeg command</summary>
+            <pre class="mono" id="cmd"></pre>
+          </details>
         </div>
       </div>
-
-      <div class="actions">
-        <button id="go" class="primary" disabled>Compress</button>
-        <div id="status" class="muted mono"></div>
-      </div>
-
-      <div style="margin:12px 0" class="progress"><div id="bar" class="bar"></div></div>
-      <div id="out"></div>
     </div>
-
-    <p class="muted mono" style="margin-top:14px">Rule of thumb: 720p → 3–5 Mbps, 1080p → 6–10 Mbps. Smaller bitrate = smaller file.</p>
   </div>
 
-  <!-- ffmpeg.wasm UMD build -->
-  <script>
-  // --- UI wiring FIRST so file choose works even if engine hasn't loaded ---
-  const $ = (id)=>document.getElementById(id);
-  const drop = $('drop');
-  const finput = $('file');
-  const fname = $('fname');
-  const go = $('go');
-  const bar = $('bar');
-  const out = $('out');
-  const status = $('status');
-  const w = $('w'); const h = $('h'); const vb = $('vb'); const fmt = $('fmt');
+  <script type="module">
+    import { createFFmpeg, fetchFile } from 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js';
 
-  const radios = Array.from(document.querySelectorAll('input[name="preset"]'));
-  const applyPreset = () => {
-    const v = radios.find(r=>r.checked).value;
-    if (v==='mp4-720'){ w.value=1280; h.value=720; vb.value='4M'; fmt.value='mp4'; }
-    if (v==='mp4-1080'){ w.value=1920; h.value=1080; vb.value='8M'; fmt.value='mp4'; }
-    if (v==='webm-720'){ w.value=1280; h.value=720; vb.value='2500k'; fmt.value='webm'; }
-  };
-  radios.forEach(r=>r.addEventListener('change', applyPreset));
-  applyPreset();
+    const el = id => document.getElementById(id);
+    const file = el('file');
+    const modeSimple = el('modeSimple');
+    const modeAdv = el('modeAdv');
+    const simple = el('simple');
+    const advanced = el('advanced');
+    const presetSimple = el('presetSimple');
+    const formatSel = el('format');
+    const crf = el('crf');
+    const res = el('resolution');
+    const fps = el('fps');
+    const ab = el('ab');
+    const copyAudio = el('copyAudio');
+    const vcodec = el('vcodec');
+    const preset = el('preset');
+    const crfAdv = el('crfAdv');
+    const extra = el('extra');
+    const start = el('start');
+    const bar = el('bar');
+    const status = el('status');
+    const out = el('out');
+    const link = el('download');
+    const size = el('size');
+    const codecInfo = el('codecInfo');
+    const cmd = el('cmd');
 
-  const setFile = (file)=>{ finput._file=file; fname.textContent=file.name; go.disabled=false; };
-  drop.addEventListener('dragover', e=>{e.preventDefault(); drop.classList.add('drag');});
-  drop.addEventListener('dragleave', ()=> drop.classList.remove('drag'));
-  drop.addEventListener('drop', e=>{ e.preventDefault(); drop.classList.remove('drag'); if(e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
-  finput.addEventListener('change', e=>{ if(e.target.files[0]) setFile(e.target.files[0]); });
+    let ffmpeg; let loaded = false;
 
-  // --- Lazy load ffmpeg when needed with 2 CDNs + fallback ---
-  let FF;
-  async function loadFF(){
-    if (FF) return FF;
-    status.textContent = 'Loading engine…';
-    const load = (src)=> new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=()=>res(); s.onerror=()=>rej(); document.head.appendChild(s); });
-    try {
-      await load('https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.umd.min.js');
-    } catch { try { await load('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.umd.min.js'); } catch(e){ throw new Error('Failed to load engine'); } }
-    FF = window.FFmpeg; status.textContent='';
-    return FF;
-  }
-
-  let ffmpeg, createFFmpeg, fetchFile;
-  function updateProgress(ratio){ bar.style.width = `${Math.round((ratio||0)*100)}%`; }
-
-  async function ensureFF(){
-    if (!ffmpeg){
-      const FF = await loadFF();
-      createFFmpeg = FF.createFFmpeg; fetchFile = FF.fetchFile;
-      ffmpeg = createFFmpeg({ log:false, corePath:'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js' });
-      FF.setProgress && ffmpeg.setProgress(({ratio})=>updateProgress(ratio));
-      await ffmpeg.load();
+    function setMode(simpleMode){
+      modeSimple.classList.toggle('active', simpleMode);
+      modeAdv.classList.toggle('active', !simpleMode);
+      simple.style.display = simpleMode ? 'block' : 'none';
+      advanced.style.display = simpleMode ? 'none' : 'block';
     }
-  }
 
-  async function compress(){
-    try{
-      go.disabled=true; out.innerHTML=''; updateProgress(0);
-      const file = finput._file || finput.files?.[0];
-      if(!file){ alert('Choose a video first.'); go.disabled=false; return; }
-      await ensureFF();
-      const inName = 'in';
-      const isMP4 = fmt.value==='mp4';
-      const outName = isMP4 ? 'output.mp4' : 'output.webm';
-      await ffmpeg.FS('writeFile', inName, await fetchFile(file));
-      const scale = `scale=${parseInt(w.value)||1280}:${parseInt(h.value)||720}:force_original_aspect_ratio=decrease`;
-      status.textContent='Compressing…';
-      const args = isMP4
-          ? ['-i',inName,'-vf',scale,'-c:v','libx264','-preset','veryfast','-b:v',vb.value||'4M','-pix_fmt','yuv420p','-movflags','+faststart','-c:a','aac','-b:a','128k',outName]
-          : ['-i',inName,'-vf',scale,'-c:v','libvpx-vp9','-b:v',vb.value||'2500k','-c:a','libopus','-b:a','96k',outName];
-      await ffmpeg.run(...args);
-      const data = await ffmpeg.FS('readFile', outName);
-      const blob = new Blob([data.buffer], {type: isMP4?'video/mp4':'video/webm'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href=url; a.download=outName; a.textContent=`Download ${outName}`; a.className='big'; out.appendChild(a);
-      const info=document.createElement('div'); info.className='mono muted'; info.style.marginTop='6px'; info.textContent=`Output size: ${(blob.size/1024).toFixed(1)} KB`; out.appendChild(info);
-      status.textContent='Done.';
-      updateProgress(1);
-    }catch(err){ console.error(err); status.textContent='Error: '+err.message; go.disabled=false; }
-  }
+    modeSimple.onclick = () => setMode(true);
+    modeAdv.onclick = () => setMode(false);
 
-  go.addEventListener('click', compress);
-</script>
+    // Preset -> defaults
+    function applyPreset(){
+      const p = presetSimple.value;
+      if(p === 'keep'){ crf.value = 22; formatSel.value = 'mp4'; res.value=''; fps.value=''; }
+      if(p === 'smaller'){ crf.value = 26; formatSel.value='mp4'; res.value=''; fps.value=''; }
+      if(p === 'social'){ crf.value = 24; formatSel.value='mp4'; /* 720p if bigger: handled at build time */ }
+      if(p === 'hevc'){ crf.value = 28; formatSel.value='mp4'; }
+      if(p === 'vp9'){ crf.value = 33; formatSel.value='webm'; }
+    }
+    presetSimple.onchange = applyPreset; applyPreset();
+
+    async function ensureFFmpeg(){
+      if(loaded) return;
+      ffmpeg = createFFmpeg({ log: true, corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js' });
+      ffmpeg.setLogger(({ type, message }) => {
+        if(type === 'fferr' || type === 'ffout'){
+          const m = message.trim();
+          if(m.startsWith('frame=')){
+            // try parse progress percent from time, fallback to pulse
+            bar.style.width = (parseFloat(bar.style.width)||0) < 95 ? (parseFloat(bar.style.width)||0)+0.2 + '%' : bar.style.width;
+          }
+        }
+      });
+      ffmpeg.setProgress(({ ratio }) => { bar.style.width = Math.round((ratio||0)*100) + '%'; });
+      status.textContent = 'Loading FFmpeg… (one-time)';
+      await ffmpeg.load();
+      loaded = true;
+      status.textContent = 'Ready.';
+    }
+
+    function human(n){
+      if(!n && n!==0) return '';
+      const u=['B','KB','MB','GB'];
+      let i=0; while(n>=1024 && i<u.length-1){ n/=1024; i++; }
+      return n.toFixed(1)+' '+u[i];
+    }
+
+    function buildCommandSimple(ext){
+      // Decide codec by preset/format
+      const p = presetSimple.value;
+      let v = 'libx264', a = 'aac';
+      if(p==='hevc') v='libx265';
+      if(p==='vp9' || ext==='webm') { v='libvpx-vp9'; a='libopus'; }
+
+      // Base
+      const args = ['-i','input'];
+
+      // Video codec + CRF path
+      if(v==='libx264' || v==='libx265'){
+        args.push('-c:v', v, '-crf', String(crf.value|| (v==='libx264'?22:28)), '-preset', (p==='smaller'?'slow':'medium'), '-pix_fmt','yuv420p');
+        if(ext==='mp4') args.push('-movflags','+faststart');
+        if(v==='libx265') args.push('-tag:v','hvc1');
+      } else if(v==='libvpx-vp9') {
+        args.push('-c:v','libvpx-vp9','-b:v','0','-crf', String(crf.value||33));
+      }
+
+      // Social: downscale if >720p (we can’t read source dims easily here; let user choose 720p if wanted)
+      if(res.value) args.push('-vf',`scale=${res.value}`);
+      if(fps.value) args.push('-r', fps.value);
+
+      // Audio
+      if(copyAudio.value==='copy'){
+        args.push('-c:a','copy');
+      } else {
+        args.push('-c:a', a, '-b:a', ab.value+'k', '-ar','48000','-ac','2');
+      }
+
+      args.push('output.'+ext);
+      return args;
+    }
+
+    function buildCommandAdvanced(ext){
+      const args=['-i','input'];
+      const v=vcodec.value; const q=String(crfAdv.value||22);
+      args.push('-c:v', v);
+      if(v==='libx264' || v==='libx265'){
+        args.push('-crf', q, '-preset', preset.value, '-pix_fmt','yuv420p');
+        if(ext==='mp4') args.push('-movflags','+faststart');
+        if(v==='libx265') args.push('-tag:v','hvc1');
+      } else if(v==='libvpx-vp9'){
+        args.push('-b:v','0','-crf', q);
+      }
+      if(res.value) args.push('-vf',`scale=${res.value}`);
+      if(fps.value) args.push('-r', fps.value);
+      if(copyAudio.value==='copy') args.push('-c:a','copy'); else args.push('-c:a','aac','-b:a',ab.value+'k','-ar','48000','-ac','2');
+      if(extra.value) args.push(...extra.value.split(' ').filter(Boolean));
+      args.push('output.'+ext);
+      return args;
+    }
+
+    function buildCommand(){
+      const ext = formatSel.value;
+      const args = (simple.style.display!=='none') ? buildCommandSimple(ext) : buildCommandAdvanced(ext);
+      cmd.textContent = 'ffmpeg '+args.map(a=> (a.includes(' ') ? '"'+a+'"' : a)).join(' ');
+      return { args, ext };
+    }
+
+    async function run(){
+      if(!file.files[0]){ alert('Choose a video first.'); return; }
+      await ensureFFmpeg();
+      bar.style.width='0%'; out.style.display='none'; codecInfo.textContent=''; size.textContent='';
+
+      const data = await fetchFile(file.files[0]);
+      const inName = 'input';
+      const { args, ext } = buildCommand();
+      status.textContent = 'Encoding…';
+      ffmpeg.FS('writeFile', inName, data);
+      try{
+        await ffmpeg.run(...args);
+        const outName = 'output.'+ext;
+        const outData = ffmpeg.FS('readFile', outName);
+        const blob = new Blob([outData.buffer], { type: ext==='mp4'?'video/mp4':'video/webm' });
+        link.href = URL.createObjectURL(blob);
+        link.download = outName;
+        out.style.display='flex';
+        size.textContent = 'Size: '+human(blob.size);
+        codecInfo.textContent = 'Format: '+ext.toUpperCase();
+        status.textContent = 'Done.';
+      } catch(err){
+        console.error(err);
+        status.textContent = 'Error: '+err.message;
+      } finally {
+        try{ ffmpeg.FS('unlink','input'); }catch{}
+        try{ ffmpeg.FS('unlink','output.mp4'); }catch{}
+        try{ ffmpeg.FS('unlink','output.webm'); }catch{}
+      }
+    }
+
+    start.onclick = run;
+  </script>
 </body>
 </html>
